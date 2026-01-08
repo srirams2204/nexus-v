@@ -1,54 +1,31 @@
-# Makefile for Fetch Stage Verification
-
-# -----------------------------------------------------------------------------
-# 1. Simulator Settings
-# -----------------------------------------------------------------------------
 SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 
-# -----------------------------------------------------------------------------
-# 2. Path Definitions
-# -----------------------------------------------------------------------------
-# We use $(PWD) to ensure absolute paths, which avoids confusion in the simulator.
-# Current dir: verification/tests/fetch
-# Root dir:    verification/tests/fetch/../../..
-
+# Project Root Directory
 PROJ_ROOT = $(PWD)/../../..
-RTL_CORE  = $(PROJ_ROOT)/rtl/core
-FIRMWARE  = $(PROJ_ROOT)/firmware
+INCLUDE_DIR = $(PROJ_ROOT)/rtl/core/include
 
-# -----------------------------------------------------------------------------
-# 3. Source Files
-# -----------------------------------------------------------------------------
-# The Units
-VERILOG_SOURCES += $(RTL_CORE)/units/pc.v
-VERILOG_SOURCES += $(RTL_CORE)/units/instr_mem.v
+# Verilog Source File Directory
+VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/stages/fetch_cycle.sv
+VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/units/pc.sv
+VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/units/instr_mem.sv
 
-# The Stage Wrapper (DUT)
-VERILOG_SOURCES += $(RTL_CORE)/stages/fetch_cycle.v
+# Compiler Argument
+ifeq ($(SIM), icarus)
+	COMPILE_ARGS += -I $(INCLUDE_DIR) -DCOCOTB_SIM
+endif
 
-# Include directory for rv_defs.vh
-COMPILE_ARGS += -I$(RTL_CORE)/include
+ifeq ($(SIM), vcs)
+	COMPILE_ARGS += +define+COCOTB_SIM +define+VCS
+	COMPILE_ARGS += +incdir+$(INCLUDE_DIR) 
+	COMPILE_ARGS += -full64 -debug_access+all -lca -kdb -sverilog
+endif
 
-# Define the path to hex file
-HEX_FILE = $(FIRMWARE)/program.hex
-
-# Override the 'PROGRAM_FILE' parameter in the top-level Verilog module.
-# We pass the absolute path so the simulator can find it from anywhere.
-# Note: The escaped quotes \" are necessary for string parameters in Icarus.
-COMPILE_ARGS += -Pfetch_cycle.PROGRAM_FILE=\"$(HEX_FILE)\"
-
-# -----------------------------------------------------------------------------
-# Cocotb Setup
-# -----------------------------------------------------------------------------
-# The name of your Top Level Verilog Module
+# Top Level Module name
 TOPLEVEL = fetch_cycle
 
-# The name of your Python Test file (without .py)
+# Python File name
 MODULE = test_fetch
 
-# NEW: Enable Waveform Dumping
-COMPILE_ARGS += -DCOCOTB_SIM
-
-# Include the standard Cocotb makefile
+# Cocotb makefile rule
 include $(shell cocotb-config --makefiles)/Makefile.sim
