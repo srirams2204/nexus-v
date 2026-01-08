@@ -46,8 +46,16 @@ assign pc_out = pc_val;
 // ---------------------------------------------------------
 `ifdef COCOTB_SIM
 initial begin
-    $dumpfile("fetch_debug.vcd"); // The file name
-    $dumpvars(0, fetch_cycle);    // Dump everything inside this module
+    // If VCS is defined (via +define+VCS in Makefile), use FSDB
+    `ifdef VCS 
+        $fsdbDumpfile("fetch_debug.fsdb"); 
+        $fsdbDumpvars(0);
+    
+    // Otherwise (Icarus, Verilator), use VCD
+    `else
+        $dumpfile("fetch_debug.vcd");
+        $dumpvars(0);
+    `endif
 end
 `endif
 

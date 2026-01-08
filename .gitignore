@@ -1,0 +1,27 @@
+# --- Python & Cocotb ---
+__pycache__/
+*.pyc
+results.xml
+sim_build/
+
+# --- Synopsys VCS Generated ---
+csrc/
+simv
+simv.daidir/
+ucli.key
+vc_hdrs.h
+
+# --- Verdi & Debug Logs ---
+verdiLog/
+novas.rc
+novas.conf
+novas_dump.log
+*.log
+
+# --- Waveform Files ---
+*.fsdb
+*.vcd
+*.vpd
+
+# --- Temporary/Backup Files ---
+*.bak
