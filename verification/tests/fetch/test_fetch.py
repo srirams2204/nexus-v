@@ -1,5 +1,4 @@
 import cocotb
-from cocotb.clock import Clock
 from cocotb.triggers import Timer, RisingEdge
 
 # 1. FIX: logic toggles 0 -> 1 -> 0

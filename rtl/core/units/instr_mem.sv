@@ -15,7 +15,7 @@ initial begin
     $readmemh(file_path, rom);
 end
 
-always @(posedge clk) begin
+always @(negedge clk) begin
     instr_out <= rom[instr_addr[31:2]];
 end
 

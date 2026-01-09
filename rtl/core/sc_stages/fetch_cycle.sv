@@ -1,4 +1,6 @@
 `include "../include/rv_defs.vh"
+`include "../units/pc.sv"
+`include "../units/instr_mem.sv"
 module fetch_cycle #(
     parameter WIDTH = `WIDTH,
     parameter PROGRAM_FILE = "../../../firmware/program.hex"

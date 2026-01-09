@@ -6,9 +6,9 @@ PROJ_ROOT = $(PWD)/../../..
 INCLUDE_DIR = $(PROJ_ROOT)/rtl/core/include
 
 # Verilog Source File Directory
-VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/sc_stages/fetch_cycle.sv
-VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/units/pc.sv
-VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/units/instr_mem.sv
+#VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/sc_stages/fetch_cycle.sv
+#VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/units/pc.sv
+VERILOG_SOURCES += $(PROJ_ROOT)/rtl/core/units/alu.sv
 
 # Compiler Argument
 ifeq ($(SIM), icarus)
@@ -22,10 +22,10 @@ ifeq ($(SIM), vcs)
 endif
 
 # Top Level Module name
-TOPLEVEL = fetch_cycle
+TOPLEVEL = alu
 
 # Python File name
-MODULE = test_fetch
+MODULE = test_alu
 
 # Cocotb makefile rule
 include $(shell cocotb-config --makefiles)/Makefile.sim
