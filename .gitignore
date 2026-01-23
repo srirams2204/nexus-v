@@ -10,6 +10,14 @@ simv
 simv.daidir/
 ucli.key
 vc_hdrs.h
+DVEfiles/
+.vlogansetup.args
+.vlogansetup.env
+*.vdb/
+
+# --- Icarus Verilog Generated ---
+*.vvp
+a.out
 
 # --- Verdi & Debug Logs ---
 verdiLog/
@@ -22,6 +30,8 @@ novas_dump.log
 *.fsdb
 *.vcd
 *.vpd
+*.evcd
 
 # --- Temporary/Backup Files ---
 *.bak
+*~
