@@ -2,6 +2,13 @@
 `include "rv_defs.vh"
 
 module nexusV_core(
+    // apb signals
+    output [31:0] paddr,
+    output [31:0] pdata,
+    output pwrite,
+    output psel,
+    output penable,
+    input [31:0] prdata,
     input clk,
     input rst_n
 );
@@ -50,6 +57,16 @@ reg [31:0] ALUOut;
 wire aluout_en;
 reg [31:0] RS1, RS2;
 
+// Addr seperation from internal mem and apb access
+wire is_mem = ~ALUOut[31];
+wire core_mem_write = mem_write_en & is_mem;
+wire core_mem_read  = mem_read_en & is_mem;
+wire core_apb_write = mem_write_en & ~is_mem;
+
+// APB Specific Signals
+wire apb_ready = 1'b1;  // change later when adding apb_master module
+wire mem_ready = (is_mem) ? 1'b1 : apb_ready;
+
 fetch_stage FETCH(
     .instr_out(rom_out_wire),
     .pc_current(current_pc_wire),
@@ -89,6 +106,7 @@ decoder DECODER(
     .zero(zero),
     .lt_signed(lt_signed),
     .lt_unsigned(lt_unsigned),
+    .mem_ready(mem_ready),
     //global signal
     .clk(clk),
     .rst(rst)
@@ -159,15 +177,24 @@ end
 data_mem DM(
     .read_data(mem_read_data),
     .misaligned(),
-    .read_en(mem_read_en),
-    .write_en(mem_write_en),
+    .read_en(core_mem_read),
+    .write_en(core_mem_write),
     .address(ALUOut),
     .write_data(RS2),
     .funct3(instr_out_wire[14:12]),
     .clk(clk)
 );
 
+wire [31:0] apb_read_data = 32'b0;
+wire [31:0] final_load_data = (is_mem) ? mem_read_data : apb_read_data;
+
+/*
 assign rd_data_wire = (wb_sel == 2'b01) ? mem_read_data :
+                      (wb_sel == 2'b10) ? current_pc_wire : 
+                       ALUOut;
+*/
+
+assign rd_data_wire = (wb_sel == 2'b01) ? final_load_data : // <--- CHANGED
                       (wb_sel == 2'b10) ? current_pc_wire : 
                        ALUOut;
 

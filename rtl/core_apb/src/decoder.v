@@ -22,6 +22,7 @@ module decoder (
     input         zero,
     input         lt_signed,
     input         lt_unsigned,
+    input         mem_ready,  // MEM access based on apb 
     input         clk,
     input         rst
 );
@@ -210,11 +211,20 @@ always @(*) begin
             next_state = S_MEM_WAIT;
         end
         S_MEM_WAIT: begin
-            next_state = S_WB;
+            mem_read_en = 1'b1;
+            if (mem_ready) begin
+                next_state = S_WB;
+            end else begin
+                next_state = S_MEM_WAIT;
+            end
         end
         S_MEM_WRITE: begin
             mem_write_en = 1'b1;
-            next_state = S_FETCH;
+            if (mem_ready) begin
+                next_state = S_FETCH;
+            end else begin
+                next_state = S_MEM_WRITE;
+            end
         end
         
         S_WB: begin

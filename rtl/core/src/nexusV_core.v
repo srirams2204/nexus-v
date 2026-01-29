@@ -3,7 +3,8 @@
 
 module nexusV_core(
     input clk,
-    input rst_n
+    input rst_n,
+    output [31:0] debug_port
 );
 
 // Active high system reset
@@ -173,6 +174,7 @@ assign rd_data_wire = (wb_sel == 2'b01) ? mem_read_data :
 
 assign pc_nxt_wire =
     (pc_sel) ? (alu_out_wire & 32'hFFFFFFFE) : alu_out_wire;
-
+    
+ assign debug_port = ALUOut;
 
 endmodule

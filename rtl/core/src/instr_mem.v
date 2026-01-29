@@ -13,7 +13,7 @@ always @(posedge clk) begin
 end
 
 initial begin
-    $readmemh("program.hex", mem);
+    $readmemh("program.mem", mem);
 end
 
 endmodule
