@@ -31,13 +31,11 @@ localparam ACCESS = 2'b10;
 
 reg [1:0] state, next_state;
 
-// 1. FSM State Register
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) state <= IDLE; 
     else        state <= next_state;
 end
 
-// 2. Next State Logic
 always @(*) begin
     next_state = state;
     case (state)
@@ -62,8 +60,6 @@ always @(*) begin
     endcase
 end
 
-// 3. APB Output Logic (Look-Ahead)
-// Uses 'next_state' to ensure pins transition EXACTLY when state changes
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         PADDR   <= 32'b0;
@@ -72,7 +68,6 @@ always @(posedge clk or negedge rst_n) begin
         PSEL    <= 1'b0;
         PENABLE <= 1'b0;
     end else begin
-        // CRITICAL FIX: Switch on 'next_state' for correct APB timing
         case (next_state)
             IDLE: begin
                 PSEL    <= 1'b0;
@@ -94,8 +89,6 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-// 4. CPU Interface & Data Capture (Current State)
-// Uses 'state' because we are reacting to what is happening RIGHT NOW
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         bus_ready <= 1'b1;
