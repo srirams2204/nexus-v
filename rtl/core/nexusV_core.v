@@ -2,9 +2,14 @@
 `include "rv_defs.vh"
 
 module nexusV_core(
+    output [31:0] bus_addr,  // Target Address
+    output [31:0] bus_wdata, // Write Data
+    output bus_write,        // 1 = Write, 0 = Read
+    output bus_valid,        // Request/Enable Signal
+    input [31:0] bus_rdata,  // Read Data from Bus
+    input bus_ready,         // Ready signal from Bus
     input clk,
-    input rst_n,
-    output [31:0] debug_port
+    input rst_n
 );
 
 // Active high system reset
@@ -16,7 +21,7 @@ wire [31:0] current_pc_wire;
 wire [31:0] pc_nxt_wire;
 wire [31:0] instr_out_wire;
 wire [31:0] old_pc_wire;
-wire pc_sel; // mux for pc_nxt port for JALR bit maksing
+wire pc_sel; 
 
 // Register File wires
 wire [4:0] rs1_wire, rs2_wire, rd_wire;
@@ -50,6 +55,25 @@ wire rf_latch_en;
 reg [31:0] ALUOut;
 wire aluout_en;
 reg [31:0] RS1, RS2;
+
+wire [31:0] clint_read_data;
+
+// Addr split Allocation
+wire is_ram_addr = (ALUOut[31:12] == 20'h00002);
+wire is_apb_addr = ALUOut[31];
+wire is_clint_addr = (ALUOut[31:16] == 16'h0200);
+
+wire core_mem_write = mem_write_en & is_ram_addr;
+wire core_mem_read  = mem_read_en & is_ram_addr;
+wire core_bus_req   = (mem_write_en | mem_read_en) & is_apb_addr;
+wire core_clint_write = mem_write_en & is_clint_addr;
+wire core_clint_read  = mem_read_en & is_clint_addr;
+
+assign bus_addr  = ALUOut;        
+assign bus_wdata = RS2;           
+assign bus_write = mem_write_en;  
+assign bus_valid = core_bus_req;  
+wire mem_ready = (is_apb_addr) ? bus_ready : 1'b1;
 
 fetch_stage FETCH(
     .instr_out(rom_out_wire),
@@ -90,6 +114,7 @@ decoder DECODER(
     .zero(zero),
     .lt_signed(lt_signed),
     .lt_unsigned(lt_unsigned),
+    .mem_ready(mem_ready), 
     //global signal
     .clk(clk),
     .rst(rst)
@@ -160,21 +185,24 @@ end
 data_mem DM(
     .read_data(mem_read_data),
     .misaligned(),
-    .read_en(mem_read_en),
-    .write_en(mem_write_en),
+    .read_en(core_mem_read), // Gated by is_ram_addr
+    .write_en(core_mem_write), // Gated by is_ram_addr
     .address(ALUOut),
     .write_data(RS2),
     .funct3(instr_out_wire[14:12]),
     .clk(clk)
 );
 
-assign rd_data_wire = (wb_sel == 2'b01) ? mem_read_data :
+wire [31:0] final_load_data = (is_ram_addr)   ? mem_read_data : 
+                              (is_clint_addr) ? clint_read_data : 
+                              (is_apb_addr)   ? bus_rdata : 
+                               32'b0;
+
+assign rd_data_wire = (wb_sel == 2'b01) ? final_load_data :
                       (wb_sel == 2'b10) ? current_pc_wire : 
                        ALUOut;
 
 assign pc_nxt_wire =
     (pc_sel) ? (alu_out_wire & 32'hFFFFFFFE) : alu_out_wire;
-    
- assign debug_port = ALUOut;
 
 endmodule
