@@ -35,6 +35,10 @@ always @(*)begin
             imm_out = {{11{instr_in[31]}}, instr_in[31], instr_in[19:12], instr_in[20], instr_in[30:21], 1'b0};
         end
 
+        `IMM_CSR: begin
+            imm_out =  {27'b0, instr_in[19:15]};
+        end
+
         default: begin
             imm_out = 32'b0;
         end

@@ -12,10 +12,17 @@
 // --------------------------------------------
 // FSM States (For FPGA BRAM Timing)
 // --------------------------------------------
-`define STATE_FETCH     2'b00
-`define STATE_RF_READ   2'b01
-`define STATE_EXECUTE   2'b10
-`define STATE_MEM_WAIT  2'b11
+`define S_FETCH       4'd1
+`define S_FETCH_WAIT  4'd2
+`define S_DECODE      4'd3
+`define S_EXECUTE     4'd4
+`define S_WB          4'd5
+`define S_MEM_READ    4'd6
+`define S_MEM_WAIT    4'd7
+`define S_MEM_WRITE   4'd8
+`define S_BRANCH      4'd9
+`define S_JALR        4'd10
+`define S_TRAP        4'd11
 
 // --------------------------------------------
 // PC Parameters
@@ -51,6 +58,9 @@
 // J-type
 `define OPCODE_JAL      7'b1101111
 
+// SYSTEM Instruction
+`define OPCODE_SYS      7'b1110011
+
 // --------------------------------------------
 // Sign Extension Operation Select Bits
 // --------------------------------------------
@@ -60,6 +70,7 @@
 `define IMM_B    3'd3
 `define IMM_U    3'd4
 `define IMM_J    3'd5
+`define IMM_CSR  3'd6
 
 // --------------------------------------------
 // ALU Operation Select Bits
@@ -74,6 +85,26 @@
 `define SRA   4'b0111
 `define SLT   4'b1000
 `define SLTU  4'b1001
-`define COPY_B 4'b1011 // Optional: Useful for LUI (Pass Immediate)
+
+// --------------------------------------------
+// SYSTEM/CSR Instruction Funct3 codes
+// --------------------------------------------
+`define FUNCT3_SYS_PRIV  3'b000  // MRET, ECALL, EBREAK
+`define FUNCT3_CSRRW     3'b001  // Atomic Read/Write CSR
+`define FUNCT3_CSRRS     3'b010  // Atomic Read/Set CSR
+`define FUNCT3_CSRRC     3'b011  // Atomic Read/Clear CSR
+`define FUNCT3_CSRRWI    3'b101  // Atomic Read/Write CSR Imm
+`define FUNCT3_CSRRSI    3'b110  // Atomic Read/Set CSR Imm
+`define FUNCT3_CSRRCI    3'b111  // Atomic Read/Clear CSR Imm
+
+// --------------------------------------------
+// CSR Addresses (Commonly Used)
+// --------------------------------------------
+`define CSR_MSTATUS      12'h300
+`define CSR_MIE          12'h304
+`define CSR_MTVEC        12'h305
+`define CSR_MEPC         12'h341
+`define CSR_MCAUSE       12'h342
+`define CSR_MIP          12'h344
 
 `endif

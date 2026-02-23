@@ -1,6 +1,3 @@
-`timescale 1ns/1ps
-`include "rv_defs.vh"
-
 module nexusV_core(
     output [31:0] bus_addr,  // Target Address
     output [31:0] bus_wdata, // Write Data
@@ -8,6 +5,11 @@ module nexusV_core(
     output bus_valid,        // Request/Enable Signal
     input [31:0] bus_rdata,  // Read Data from Bus
     input bus_ready,         // Ready signal from Bus
+    // CSR interrupt signals
+    input mtip,
+    input msip,
+    input meip,
+    // Global signals 
     input clk,
     input rst_n
 );
@@ -56,24 +58,30 @@ reg [31:0] ALUOut;
 wire aluout_en;
 reg [31:0] RS1, RS2;
 
-wire [31:0] clint_read_data;
-
 // Addr split Allocation
 wire is_ram_addr = (ALUOut[31:12] == 20'h00002);
 wire is_apb_addr = ALUOut[31];
-wire is_clint_addr = (ALUOut[31:16] == 16'h0200);
 
 wire core_mem_write = mem_write_en & is_ram_addr;
 wire core_mem_read  = mem_read_en & is_ram_addr;
 wire core_bus_req   = (mem_write_en | mem_read_en) & is_apb_addr;
-wire core_clint_write = mem_write_en & is_clint_addr;
-wire core_clint_read  = mem_read_en & is_clint_addr;
 
 assign bus_addr  = ALUOut;        
 assign bus_wdata = RS2;           
-assign bus_write = mem_write_en;  
+assign bus_write = mem_write_en & is_apb_addr;  
 assign bus_valid = core_bus_req;  
 wire mem_ready = (is_apb_addr) ? bus_ready : 1'b1;
+
+// For Interrupt handeling
+wire timer_irq   = mtip;
+wire soft_irq    = msip;
+wire external_irq = meip;
+
+// CSR Interface wires
+wire trap_enter;
+wire mret_exec;
+wire [31:0] mtvec_out;
+wire [31:0] mepc_out;
 
 fetch_stage FETCH(
     .instr_out(rom_out_wire),
@@ -109,6 +117,8 @@ decoder DECODER(
     .mem_read_en(mem_read_en),
     .mem_write_en(mem_write_en),
     .wb_sel(wb_sel),
+    .trap_enter(trap_enter),
+    .mret_exec(mret_exec),
     //inputs
     .instr_in(instr_out_wire),
     .zero(zero),
@@ -116,6 +126,18 @@ decoder DECODER(
     .lt_unsigned(lt_unsigned),
     .mem_ready(mem_ready), 
     //global signal
+    .clk(clk),
+    .rst(rst)
+);
+
+csr_unit CSR(
+    .mtvec_out(mtvec_out),
+    .mepc_out(mepc_out),
+    .trap_enter(trap_enter),
+    .trap_pc(old_pc_wire),
+    .trap_cause(32'd11),  // ecall cause
+    .mret_exec(mret_exec),
+    // global signal
     .clk(clk),
     .rst(rst)
 );
@@ -193,16 +215,19 @@ data_mem DM(
     .clk(clk)
 );
 
-wire [31:0] final_load_data = (is_ram_addr)   ? mem_read_data : 
-                              (is_clint_addr) ? clint_read_data : 
-                              (is_apb_addr)   ? bus_rdata : 
-                               32'b0;
+wire [31:0] final_load_data = (is_ram_addr) ? mem_read_data : bus_rdata;
 
 assign rd_data_wire = (wb_sel == 2'b01) ? final_load_data :
                       (wb_sel == 2'b10) ? current_pc_wire : 
                        ALUOut;
-
+/*
 assign pc_nxt_wire =
     (pc_sel) ? (alu_out_wire & 32'hFFFFFFFE) : alu_out_wire;
+*/
+
+assign pc_nxt_wire = (trap_enter) ? mtvec_out :
+                     (mret_exec)  ? mepc_out :
+                     (pc_sel) ? (alu_out_wire & 32'hFFFFFFFE) :
+                     alu_out_wire;
 
 endmodule

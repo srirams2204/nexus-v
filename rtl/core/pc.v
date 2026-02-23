@@ -1,4 +1,3 @@
-`include "rv_defs.vh"
 module pc(
     output reg [31:0] pc_out,
     input [31:0] pc_val,

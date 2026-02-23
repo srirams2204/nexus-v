@@ -13,6 +13,7 @@
         "pack": "gowin_pack",
         "prog": "openFPGALoader",
         "iverilog": "iverilog",
+        "verilator": "verilator",
         "vvp": "vvp",
         "gtkwave": "gtkwave"
     },
