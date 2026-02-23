@@ -16,7 +16,10 @@ module decoder (
     // trap and csr
     output reg trap_enter,
     output reg mret_exec,
-
+    // CSR control output
+    output reg        csr_we,
+    output reg [1:0]  csr_op,
+    output reg        csr_use_imm,
     // ---------------- Inputs -----------------
     input  [31:0] instr_in,
     input         zero,
@@ -38,7 +41,7 @@ localparam S_MEM_WRITE  = 4'd8;
 localparam S_BRANCH     = 4'd9;
 localparam S_JALR       = 4'd10;
 localparam S_TRAP       = 4'd11; 
-localparam S_CSR        = 2'd12;
+localparam S_CSR        = 4'd12;
 
 wire [6:0] op = instr_in[6:0];
 wire [2:0] funct3 = instr_in[14:12];
@@ -83,6 +86,10 @@ always @(*) begin
     trap_enter   = 1'b0;
     mret_exec    = 1'b0;
 
+    csr_we       = 1'b0;
+    csr_op       = 2'b00;
+    csr_use_imm  = 1'b0;
+
     // Immediate Selection 
     case(op)
         `OPCODE_STORE:                imm_sel = `IMM_S;
@@ -91,6 +98,13 @@ always @(*) begin
         `OPCODE_LUI, `OPCODE_AUIPC:   imm_sel = `IMM_U;
         `OPCODE_LOAD, `OPCODE_JALR:   imm_sel = `IMM_I; 
         `OPCODE_I_TYPE:               imm_sel = `IMM_I;
+        `OPCODE_SYS: begin
+            if (funct3[2]) begin
+                imm_sel = `IMM_CSR;
+            end else begin
+                imm_sel = `IMM_NONE;
+            end
+        end
         default:                      imm_sel = `IMM_NONE;
     endcase
 
@@ -235,6 +249,34 @@ always @(*) begin
             trap_enter = 1'b1;
             pc_write = 1'b1;
             ir_en = 1'b1;
+            next_state = S_FETCH;
+        end
+
+        S_CSR: begin
+            reg_write = 1'b1;
+            wb_sel    = `WB_CSR;
+            csr_use_imm = funct3[2];   // 1 = immediate version
+            // CSR operation encoding
+            case(funct3[1:0])
+                2'b01: csr_op = 2'b00; // CSRRW
+                2'b10: csr_op = 2'b01; // CSRRS
+                2'b11: csr_op = 2'b10; // CSRRC
+                default: csr_op = 2'b00;
+            endcase
+            // Write enable rules
+            if (funct3[1:0] == 2'b01) begin
+                csr_we = 1'b1;  // CSRRW always writes
+            end
+            else begin
+                // CSRRS / CSRRC
+                if (funct3[2]) begin
+                    // immediate version
+                    csr_we = (instr_in[19:15] != 5'd0);
+                end else begin
+                    // register version
+                    csr_we = (instr_in[19:15] != 5'd0);
+                end
+            end
             next_state = S_FETCH;
         end
 

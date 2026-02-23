@@ -54,19 +54,19 @@ module csr_test;
                  DUT.current_pc_wire,
                  DUT.CSR.mepc,
                  DUT.CSR.mcause,
-                 DUT.trap_enter,
-                 DUT.mret_exec);
+                 DUT.trap_enter_wire,
+                 DUT.mret_exec_wire);
     end
 
     // ---------------- Trap Logging ----------------
     always @(posedge clk) begin
-        if (DUT.trap_enter) begin
+        if (DUT.trap_enter_wire) begin
             $display(">>> TRAP ENTERED at %0t", $time);
             $display("    mepc   = %h", DUT.CSR.mepc);
             $display("    mcause = %h", DUT.CSR.mcause);
         end
 
-        if (DUT.mret_exec) begin
+        if (DUT.mret_exec_wire) begin
             $display(">>> MRET EXECUTED at %0t", $time);
             $display("    Returning to %h", DUT.CSR.mepc);
         end

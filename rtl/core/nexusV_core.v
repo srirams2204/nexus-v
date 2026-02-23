@@ -78,10 +78,18 @@ wire soft_irq    = msip;
 wire external_irq = meip;
 
 // CSR Interface wires
-wire trap_enter;
-wire mret_exec;
+wire trap_enter_wire;
+wire mret_exec_wire;
 wire [31:0] mtvec_out;
 wire [31:0] mepc_out;
+
+// CSR Datapath wires
+wire [11:0] csr_addr = instr_out_wire[31:20];
+wire [31:0] csr_rdata;
+wire [31:0] csr_wdata;
+wire csr_we;
+wire [1:0] csr_op;
+wire csr_use_imm;
 
 fetch_stage FETCH(
     .instr_out(rom_out_wire),
@@ -117,8 +125,13 @@ decoder DECODER(
     .mem_read_en(mem_read_en),
     .mem_write_en(mem_write_en),
     .wb_sel(wb_sel),
-    .trap_enter(trap_enter),
-    .mret_exec(mret_exec),
+    // Trap Control
+    .trap_enter(trap_enter_wire),
+    .mret_exec(mret_exec_wire),
+    // CSR Control
+    .csr_we(csr_we),
+    .csr_op(csr_op),
+    .csr_use_imm(csr_use_imm),
     //inputs
     .instr_in(instr_out_wire),
     .zero(zero),
@@ -131,12 +144,17 @@ decoder DECODER(
 );
 
 csr_unit CSR(
+    .csr_rdata(csr_rdata),
+    .csr_addr(csr_addr),
+    .csr_wdata(csr_wdata),
+    .csr_we(csr_we),
+    .csr_op(csr_op),
     .mtvec_out(mtvec_out),
     .mepc_out(mepc_out),
-    .trap_enter(trap_enter),
+    .trap_enter(trap_enter_wire),
     .trap_pc(old_pc_wire),
     .trap_cause(32'd11),  // ecall cause
-    .mret_exec(mret_exec),
+    .mret_exec(mret_exec_wire),
     // global signal
     .clk(clk),
     .rst(rst)
@@ -215,18 +233,28 @@ data_mem DM(
     .clk(clk)
 );
 
+assign csr_wdata = csr_use_imm ? imm_out_wire : RS1;
+
 wire [31:0] final_load_data = (is_ram_addr) ? mem_read_data : bus_rdata;
 
+/*
 assign rd_data_wire = (wb_sel == 2'b01) ? final_load_data :
                       (wb_sel == 2'b10) ? current_pc_wire : 
                        ALUOut;
+*/
+
+assign rd_data_wire = (wb_sel == 2'b01) ? final_load_data :
+                      (wb_sel == 2'b10) ? current_pc_wire :
+                      (wb_sel == `WB_CSR) ? csr_rdata :
+                      ALUOut;
+
 /*
 assign pc_nxt_wire =
     (pc_sel) ? (alu_out_wire & 32'hFFFFFFFE) : alu_out_wire;
 */
 
-assign pc_nxt_wire = (trap_enter) ? mtvec_out :
-                     (mret_exec)  ? mepc_out :
+assign pc_nxt_wire = (trap_enter_wire) ? mtvec_out :
+                     (mret_exec_wire)  ? mepc_out :
                      (pc_sel) ? (alu_out_wire & 32'hFFFFFFFE) :
                      alu_out_wire;
 

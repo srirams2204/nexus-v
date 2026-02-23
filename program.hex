@@ -1,5 +1,7 @@
-00500093   
-00000073  
-00A00113   
-00000000   
-30200073   
+00500093   // 0x00: li x1, 5
+34009173   // 0x04: csrrw x2, mscratch, x1 (Write 5 to mscratch, x2 gets old val 0)
+00000073   // 0x08: ecall (Trap! Jumps to 0x100)
+00A00193   // 0x0C: li x3, 10 (Should execute AFTER mret if mepc+4 fix is applied)
+00000000   // 0x10: nop
+@40        // Jump to address 0x100 (4 * 0x40 = 0x100)
+30200073   // 0x100: mret

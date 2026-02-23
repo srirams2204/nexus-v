@@ -107,4 +107,12 @@
 `define CSR_MCAUSE       12'h342
 `define CSR_MIP          12'h344
 
+// --------------------------------------------
+// CSR writeback select
+// --------------------------------------------
+`define WB_ALU   2'b00
+`define WB_MEM   2'b01
+`define WB_PC    2'b10
+`define WB_CSR   2'b11
+
 `endif
