@@ -1,6 +1,3 @@
-`timescale 1ns/1ps
-`include "rv_defs.vh"
-
 module alu (
     output reg [31:0] alu_out,
     input [31:0] A, B,

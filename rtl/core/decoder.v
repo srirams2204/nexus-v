@@ -1,33 +1,38 @@
 module decoder (
     // ---------------- Outputs ----------------
-    output reg        pc_write,
-    output reg        pc_sel,
-    output reg        ir_en,
-    output reg        reg_write,
-    output reg        rf_latch_en,
-    output reg [3:0]  alu_sel,
-    output reg [1:0]  alu_a_sel,
-    output reg [1:0]  alu_b_sel,
-    output reg        aluout_en,
+    output reg pc_write,
+    output reg pc_sel,
+    output reg ir_en,
+    output reg reg_write,
+    output reg rf_latch_en,
+    output reg [3:0] alu_sel,
+    output reg [1:0] alu_a_sel,
+    output reg [1:0] alu_b_sel,
+    output reg aluout_en,
     output reg [2:0]  imm_sel,
-    output reg        mem_read_en,
-    output reg        mem_write_en,
-    output reg [1:0]  wb_sel,
+    output reg mem_read_en,
+    output reg mem_write_en,
+    output reg [1:0] wb_sel,
     // trap and csr
     output reg trap_enter,
     output reg mret_exec,
     // CSR control output
-    output reg        csr_we,
-    output reg [1:0]  csr_op,
-    output reg        csr_use_imm,
+    output reg csr_we,
+    output reg [1:0] csr_op,
+    output reg csr_use_imm,
+    output reg [31:0] trap_cause_out,
     // ---------------- Inputs -----------------
-    input  [31:0] instr_in,
-    input         zero,
-    input         lt_signed,
-    input         lt_unsigned,
-    input         mem_ready,  // MEM access based on apb 
-    input         clk,
-    input         rst
+    input [31:0] instr_in,
+    input zero,
+    input lt_signed,
+    input lt_unsigned,
+    input mem_ready,  // MEM access based on apb 
+    input interrupt_pending,
+    input [31:0] interrupt_cause, 
+    input instruction_misaligned,
+    input data_misaligned,   
+    input clk,
+    input rst
 );
 
 localparam S_FETCH      = 4'd1;
@@ -47,26 +52,36 @@ wire [6:0] op = instr_in[6:0];
 wire [2:0] funct3 = instr_in[14:12];
 wire [6:0] funct7 = instr_in[31:25];
 
-// ECALL & EBREAK Detection
+// ECALL Detection
 wire [11:0] imm12 = instr_in[31:20];
 wire system_instr = (op == `OPCODE_SYS);
 wire privileged_instr = system_instr && (funct3 == 3'b000);
 
 wire ecall_true = privileged_instr && (imm12 == 12'h000);  // ecall identification
 wire ebreak_true = privileged_instr && (imm12 == 12'h001); // ebreak identification
-wire mret_true = privileged_instr && (imm12 == 12'h302);   // mret identification
+wire mret_true  = privileged_instr && (imm12 == 12'h302);  // mret identification
 
-// FSM State registers
+// FSM State and Trap Cause Registers
 reg [3:0] state, next_state;
+reg [31:0] trap_cause_reg;
+reg [31:0] next_trap_cause;
 
+// Sequential block for State and Trap Latch
 always @(posedge clk) begin
-    if (rst) 
+    if (rst) begin
         state <= S_FETCH;
-    else 
+        trap_cause_reg <= 32'b0;
+    end else begin
         state <= next_state;
+        // ONLY latch the cause when transitioning into S_TRAP
+        if (next_state == S_TRAP && state != S_TRAP) begin
+            trap_cause_reg <= next_trap_cause;
+        end
+    end
 end
 
 always @(*) begin
+    // Default initializations
     next_state   = S_FETCH;
     pc_write     = 1'b0; 
     pc_sel       = 1'b0;     
@@ -89,8 +104,11 @@ always @(*) begin
     csr_we       = 1'b0;
     csr_op       = 2'b00;
     csr_use_imm  = 1'b0;
+    
+    next_trap_cause = trap_cause_reg; 
+    trap_cause_out  = trap_cause_reg;
 
-    // Immediate Selection 
+    // --- 2. IMMEDIATE SELECTION --- 
     case(op)
         `OPCODE_STORE:                imm_sel = `IMM_S;
         `OPCODE_BRANCH:               imm_sel = `IMM_B;
@@ -99,18 +117,26 @@ always @(*) begin
         `OPCODE_LOAD, `OPCODE_JALR:   imm_sel = `IMM_I; 
         `OPCODE_I_TYPE:               imm_sel = `IMM_I;
         `OPCODE_SYS: begin
-            if (funct3[2]) begin
-                imm_sel = `IMM_CSR;
-            end else begin
-                imm_sel = `IMM_NONE;
-            end
+            if (funct3[2]) imm_sel = `IMM_CSR;
+            else           imm_sel = `IMM_NONE;
         end
         default:                      imm_sel = `IMM_NONE;
     endcase
 
+    // --- 3. FSM LOGIC ---
     case (state)
         S_FETCH: begin
-            next_state = S_FETCH_WAIT;
+            if (instruction_misaligned) begin
+                next_trap_cause = 32'd0;  // Instruction address misaligned
+                next_state = S_TRAP;
+            end
+            else if (interrupt_pending) begin
+                next_trap_cause = interrupt_cause; // Hardware Interrupts
+                next_state = S_TRAP;
+            end
+            else begin
+                next_state = S_FETCH_WAIT;
+            end
         end
 
         S_FETCH_WAIT: begin
@@ -128,16 +154,46 @@ always @(*) begin
         end
 
         S_EXECUTE: begin
-            if (ecall_true) begin
+            // Verify Opcode Validity
+            if (!(op == `OPCODE_R_TYPE || op == `OPCODE_I_TYPE ||
+                  op == `OPCODE_LOAD   || op == `OPCODE_STORE  ||
+                  op == `OPCODE_BRANCH || op == `OPCODE_JAL    ||
+                  op == `OPCODE_JALR   || op == `OPCODE_LUI    ||
+                  op == `OPCODE_AUIPC  || op == `OPCODE_SYS ||
+                  op == 7'b0001111)) begin
+                next_trap_cause = 32'd2;
                 next_state = S_TRAP;
-            end else if (mret_true) begin
+            end 
+            // ECALL
+            else if (ecall_true) begin
+                next_trap_cause = 32'd11;
+                next_state = S_TRAP;
+            end 
+            // EBREAK
+            else if (ebreak_true) begin
+                next_trap_cause = 32'd3;
+                next_state = S_TRAP;
+            end
+            // MRET
+            else if (mret_true) begin
                 mret_exec = 1'b1;
                 pc_write = 1'b1;
                 ir_en = 1'b1;
                 next_state = S_FETCH;
-            end else if (system_instr && funct3 != 3'b000) begin
-                next_state = S_CSR;
-            end else begin
+            end 
+            // CSR Instructions
+            else if (system_instr && funct3 != 3'b000) begin
+                case(funct3)
+                    3'b001, 3'b010, 3'b011,
+                    3'b101, 3'b110, 3'b111:
+                        next_state = S_CSR;
+                    default: begin
+                        next_trap_cause = 32'd2;
+                        next_state = S_TRAP;
+                    end
+                endcase
+            end 
+            else begin
                 case(op)
                     `OPCODE_R_TYPE, `OPCODE_I_TYPE: begin
                         alu_a_sel = 2'b01; 
@@ -152,10 +208,15 @@ always @(*) begin
                             3'b101: alu_sel = (funct7[5]) ? `SRA : `SRL; 
                             3'b110: alu_sel = `OR;
                             3'b111: alu_sel = `AND;
-                            default: alu_sel = `ADD;
+                            default: begin
+                                next_trap_cause = 32'd2;
+                                next_state = S_TRAP;
+                            end
                         endcase
-                        aluout_en = 1'b1;
-                        next_state = S_WB;
+                        if (next_state != S_TRAP) begin
+                            aluout_en = 1'b1;
+                            next_state = S_WB; 
+                        end
                     end
 
                     `OPCODE_LOAD, `OPCODE_STORE: begin
@@ -178,25 +239,22 @@ always @(*) begin
                             3'b101: next_state = (!lt_signed) ? S_BRANCH : S_FETCH;  // BGE
                             3'b110: next_state = (lt_unsigned) ? S_BRANCH : S_FETCH; // BLTU
                             3'b111: next_state = (!lt_unsigned) ? S_BRANCH : S_FETCH;// BGEU
-                            default: next_state = S_FETCH;
+                            default: begin
+                                next_trap_cause = 32'd2;
+                                next_state = S_TRAP;
+                            end
                         endcase
                     end
 
-                    // --- JAL (SPLIT CYCLE) ---
                     `OPCODE_JAL: begin
-                        // Cycle 1: Save Return Address (PC+4)
                         reg_write = 1'b1;
                         wb_sel    = 2'b10; 
-                        // Cycle 2: Perform Jump (Use S_BRANCH state)
                         next_state = S_BRANCH;
                     end
 
-                    // --- JALR (SPLIT CYCLE) ---
                     `OPCODE_JALR: begin
-                        // Cycle 1: Save Return Address (PC+4)
                         reg_write = 1'b1;
                         wb_sel    = 2'b10;
-                        // Cycle 2: Perform Jump (New S_JALR state)
                         next_state = S_JALR;
                     end
 
@@ -215,7 +273,15 @@ always @(*) begin
                         aluout_en = 1'b1;
                         next_state = S_WB;
                     end
-                    default: next_state = S_FETCH;
+
+                    7'b0001111: begin // FENCE and FENCE.I as NOP
+                        next_state = S_FETCH;
+                    end
+                    
+                    default: begin
+                        next_trap_cause = 32'd2;  
+                        next_state = S_TRAP;
+                    end
                 endcase
             end
         end
@@ -225,10 +291,8 @@ always @(*) begin
             alu_a_sel = 2'b00; // Old PC
             alu_b_sel = 2'b01; // Imm
             alu_sel   = `ADD;
-            
             pc_write  = 1'b1;  // Update PC
             ir_en     = 1'b1;  
-            
             next_state = S_FETCH;
         end
 
@@ -237,54 +301,50 @@ always @(*) begin
             alu_a_sel = 2'b01; // RS1
             alu_b_sel = 2'b01; // Imm
             alu_sel   = `ADD;
-            
             pc_write  = 1'b1;  // Update PC
             pc_sel    = 1'b1;  // Mask LSB
             ir_en     = 1'b1;  
-            
             next_state = S_FETCH;
         end
 
         S_TRAP: begin
             trap_enter = 1'b1;
-            pc_write = 1'b1;
-            ir_en = 1'b1;
+            pc_write   = 1'b1;
+            ir_en      = 1'b0; // Wait for new fetch cycle to grab instruction
             next_state = S_FETCH;
         end
 
         S_CSR: begin
             reg_write = 1'b1;
             wb_sel    = `WB_CSR;
-            csr_use_imm = funct3[2];   // 1 = immediate version
-            // CSR operation encoding
+            csr_use_imm = funct3[2];   
+            
             case(funct3[1:0])
                 2'b01: csr_op = 2'b00; // CSRRW
                 2'b10: csr_op = 2'b01; // CSRRS
                 2'b11: csr_op = 2'b10; // CSRRC
                 default: csr_op = 2'b00;
             endcase
-            // Write enable rules
+            
             if (funct3[1:0] == 2'b01) begin
-                csr_we = 1'b1;  // CSRRW always writes
-            end
-            else begin
-                // CSRRS / CSRRC
-                if (funct3[2]) begin
-                    // immediate version
-                    csr_we = (instr_in[19:15] != 5'd0);
-                end else begin
-                    // register version
-                    csr_we = (instr_in[19:15] != 5'd0);
-                end
+                csr_we = 1'b1;  
+            end else begin
+                csr_we = (instr_in[19:15] != 5'd0);
             end
             next_state = S_FETCH;
         end
 
         // ... Memory States ...
         S_MEM_READ: begin
-            mem_read_en = 1'b1;
-            next_state = S_MEM_WAIT;
+            if (data_misaligned) begin
+                next_trap_cause = 32'd4;  // Load misaligned
+                next_state = S_TRAP;
+            end else begin
+                mem_read_en = 1'b1;
+                next_state = S_MEM_WAIT;
+            end
         end
+
         S_MEM_WAIT: begin
             mem_read_en = 1'b1;
             if (mem_ready) begin
@@ -293,25 +353,32 @@ always @(*) begin
                 next_state = S_MEM_WAIT;
             end
         end
+
         S_MEM_WRITE: begin
-            mem_write_en = 1'b1;
-            if (mem_ready) begin
-                next_state = S_FETCH;
+            if (data_misaligned) begin
+                next_trap_cause = 32'd6;  // Store misaligned
+                next_state = S_TRAP;
             end else begin
-                next_state = S_MEM_WRITE;
+                mem_write_en = 1'b1;
+                if (mem_ready) next_state = S_FETCH;
+                else           next_state = S_MEM_WRITE;
             end
         end
         
         S_WB: begin
             reg_write = 1'b1;
-            if (op == `OPCODE_LOAD) 
-                wb_sel = 2'b01; 
-            else 
+            if (op == `OPCODE_LOAD) begin
+                wb_sel = 2'b01;
+            end else begin
                 wb_sel = 2'b00; 
+            end               
             next_state = S_FETCH;
         end
 
-        default: next_state = S_FETCH;
+        default: begin
+            next_trap_cause = 32'd2;
+            next_state = S_TRAP;
+        end
     endcase
 end
 

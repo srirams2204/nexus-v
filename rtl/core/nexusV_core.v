@@ -57,6 +57,8 @@ wire rf_latch_en;
 reg [31:0] ALUOut;
 wire aluout_en;
 reg [31:0] RS1, RS2;
+wire [31:0] interrupt_cause_wire;
+wire interrupt_pending_wire;
 
 // Addr split Allocation
 wire is_ram_addr = (ALUOut[31:12] == 20'h00002);
@@ -73,8 +75,8 @@ assign bus_valid = core_bus_req;
 wire mem_ready = (is_apb_addr) ? bus_ready : 1'b1;
 
 // For Interrupt handeling
-wire timer_irq   = mtip;
-wire soft_irq    = msip;
+wire timer_irq = mtip;
+wire software_irq = msip;
 wire external_irq = meip;
 
 // CSR Interface wires
@@ -90,6 +92,14 @@ wire [31:0] csr_wdata;
 wire csr_we;
 wire [1:0] csr_op;
 wire csr_use_imm;
+
+wire [31:0] trap_cause_wire;
+
+// LOAD/STORE Misaligned
+wire data_misaligned;
+
+// Instruction Misaligned
+wire instr_misaligned = |current_pc_wire[1:0];
 
 fetch_stage FETCH(
     .instr_out(rom_out_wire),
@@ -132,12 +142,17 @@ decoder DECODER(
     .csr_we(csr_we),
     .csr_op(csr_op),
     .csr_use_imm(csr_use_imm),
+    .trap_cause_out(trap_cause_wire),
     //inputs
     .instr_in(instr_out_wire),
     .zero(zero),
     .lt_signed(lt_signed),
     .lt_unsigned(lt_unsigned),
     .mem_ready(mem_ready), 
+    .interrupt_pending(interrupt_pending_wire),
+    .interrupt_cause(interrupt_cause_wire),
+    .instruction_misaligned(instr_misaligned),
+    .data_misaligned(data_misaligned),
     //global signal
     .clk(clk),
     .rst(rst)
@@ -153,8 +168,13 @@ csr_unit CSR(
     .mepc_out(mepc_out),
     .trap_enter(trap_enter_wire),
     .trap_pc(old_pc_wire),
-    .trap_cause(32'd11),  // ecall cause
+    .trap_cause(trap_cause_wire),  
     .mret_exec(mret_exec_wire),
+    .interrupt_pending(interrupt_pending_wire),
+    .interrupt_cause(interrupt_cause_wire),
+    .timer_irq(timer_irq),
+    .software_irq(software_irq),
+    .external_irq(external_irq),
     // global signal
     .clk(clk),
     .rst(rst)
@@ -224,7 +244,7 @@ end
 
 data_mem DM(
     .read_data(mem_read_data),
-    .misaligned(),
+    .misaligned(data_misaligned),
     .read_en(core_mem_read), // Gated by is_ram_addr
     .write_en(core_mem_write), // Gated by is_ram_addr
     .address(ALUOut),

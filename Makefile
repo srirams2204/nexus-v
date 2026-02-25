@@ -12,6 +12,9 @@ BUS_DIR       := $(RTL_DIR)/bus_protocol
 PERIPH_DIR    := $(RTL_DIR)/peripherals
 SOC_DIR       := $(RTL_DIR)/soc
 
+# 1. Target the definitions header file
+COMMON_HDR    := $(COMMON_DIR)/rv_defs.vh
+
 CORE_SRCS     := $(wildcard $(CORE_DIR)/*.v)
 BUS_SRCS      := $(wildcard $(BUS_DIR)/*.v)
 SOC_SRCS      := $(wildcard $(SOC_DIR)/*.v)
@@ -19,7 +22,9 @@ PERIPH_SRCS   := $(wildcard $(PERIPH_DIR)/*.v)
 
 TB_SRC        := testbench/csr_test.v
 
-ALL_SRCS      := $(CORE_SRCS) \
+# 2. Put the header file at the VERY TOP of the compilation list
+ALL_SRCS      := $(COMMON_HDR) \
+                 $(CORE_SRCS) \
                  $(BUS_SRCS) \
                  $(SOC_SRCS) \
                  $(PERIPH_SRCS) \

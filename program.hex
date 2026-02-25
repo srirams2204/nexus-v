@@ -1,7 +1,15 @@
-00500093   // 0x00: li x1, 5
-34009173   // 0x04: csrrw x2, mscratch, x1 (Write 5 to mscratch, x2 gets old val 0)
-00000073   // 0x08: ecall (Trap! Jumps to 0x100)
-00A00193   // 0x0C: li x3, 10 (Should execute AFTER mret if mepc+4 fix is applied)
-00000000   // 0x10: nop
-@40        // Jump to address 0x100 (4 * 0x40 = 0x100)
-30200073   // 0x100: mret
+00000093   // 0x00: li x1, 0
+00A00113   // 0x04: li x2, 10
+000021b7   // 0x08: lui x3, 2    <-- FIXED: Points to 0x00002000 (Your RAM)
+00108093   // 0x0C: addi x1, x1, 1
+0011A023   // 0x10: sw x1, 0(x3)
+0001A203   // 0x14: lw x4, 0(x3)
+FE20CAE3   // 0x18: blt x1, x2, -12 
+00000073   // 0x1C: ecall
+0000006F   // 0x20: j .          
+
+@40        // Trap handler at 0x100
+341022f3   // 0x100: csrr x5, mepc
+00428293   // 0x104: addi x5, x5, 4
+34129073   // 0x108: csrw mepc, x5
+30200073   // 0x10c: mret

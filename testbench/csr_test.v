@@ -16,6 +16,7 @@ module csr_test;
     wire msip = 1'b0;
     wire meip = 1'b0;
 
+    // Instantiate the Core
     nexusV_core DUT (
         .bus_addr(bus_addr),
         .bus_wdata(bus_wdata),
@@ -30,58 +31,90 @@ module csr_test;
         .rst_n(rst_n)
     );
 
-    // ---------------- Clock ----------------
+    // ---------------- Clock Generation ----------------
     initial begin
         clk = 0;
-        forever #5 clk = ~clk;   // 100MHz
+        forever #5 clk = ~clk;   // 100MHz Clock
     end
 
-    // ---------------- Reset ----------------
+    // ---------------- Reset Sequence ----------------
     initial begin
         rst_n = 0;
         #30;
         rst_n = 1;
     end
 
-    // ---------------- Monitor ----------------
-    initial begin
-        $display("-------------------------------------------------------");
-        $display(" Time   PC          mepc        mcause   trap mret ");
-        $display("-------------------------------------------------------");
-
-        $monitor("%0t   %h   %h   %h   %b    %b",
-                 $time,
-                 DUT.current_pc_wire,
-                 DUT.CSR.mepc,
-                 DUT.CSR.mcause,
-                 DUT.trap_enter_wire,
-                 DUT.mret_exec_wire);
-    end
-
-    // ---------------- Trap Logging ----------------
+    // ---------------- Clean Execution Trace ----------------
+    // Logs the PC only when a new instruction is latched from the fetch buffer
     always @(posedge clk) begin
-        if (DUT.trap_enter_wire) begin
-            $display(">>> TRAP ENTERED at %0t", $time);
-            $display("    mepc   = %h", DUT.CSR.mepc);
-            $display("    mcause = %h", DUT.CSR.mcause);
-        end
-
-        if (DUT.mret_exec_wire) begin
-            $display(">>> MRET EXECUTED at %0t", $time);
-            $display("    Returning to %h", DUT.CSR.mepc);
+        if (rst_n && DUT.ir_en) begin
+            $display("[%0t] Executing PC: %08x", $time, DUT.current_pc_wire);
         end
     end
 
-    // ---------------- End Simulation ----------------
+    // ---------------- Trap & Exception Logging ----------------
+    always @(posedge clk) begin
+        if (rst_n) begin
+            if (DUT.trap_enter_wire) begin
+                $display("\n>>> [TRAP EXCEPTION] Time: %0t", $time);
+                $display("    Faulting PC (mepc) : %08x", DUT.CSR.mepc);
+                $display("    Cause Code (mcause): %08x\n", DUT.CSR.mcause);
+            end
+
+            if (DUT.mret_exec_wire) begin
+                $display("\n>>> [TRAP RETURN] Time: %0t", $time);
+                $display("    Returning to PC    : %08x\n", DUT.CSR.mepc);
+            end
+        end
+    end
+
+    // ---------------- Auto-Halt Detection ----------------
+    // Detects if the CPU jumps to the exact same PC it is currently at (e.g., j .)
+    reg [31:0] last_executed_pc;
+    always @(posedge clk) begin
+        if (rst_n && DUT.ir_en) begin
+            if (DUT.current_pc_wire == last_executed_pc) begin
+                $display("\n[HALT DETECTED] Infinite loop at PC: %08x", DUT.current_pc_wire);
+                dump_architectural_state();
+            end
+            last_executed_pc <= DUT.current_pc_wire;
+        end
+    end
+
+    // Failsafe Timeout
     initial begin
-        #2000;
-
-        $display("\n---- Final Register Values ----");
-        $display("x1 = %0d", DUT.RF.register[1]);
-        $display("x2 = %0d", DUT.RF.register[2]);
-        $display("--------------------------------");
-
-        $finish;
+        #100000; // Adjust this if your program takes longer to run
+        $display("\n[TIMEOUT] Simulation exceeded maximum time limit.");
+        dump_architectural_state();
     end
+
+    // ---------------- Universal State Dump Task ----------------
+    task dump_architectural_state;
+        integer i;
+        begin
+            $display("\n======================================================================");
+            $display("                       FINAL REGISTER FILE DUMP");
+            $display("======================================================================");
+            // Print registers in a 4-column grid
+            for (i = 0; i < 32; i = i + 4) begin
+                $display(" x%02d: %08x | x%02d: %08x | x%02d: %08x | x%02d: %08x",
+                         i,   DUT.RF.register[i],
+                         i+1, DUT.RF.register[i+1],
+                         i+2, DUT.RF.register[i+2],
+                         i+3, DUT.RF.register[i+3]);
+            end
+
+            $display("\n======================================================================");
+            $display("                          FINAL CSR DUMP");
+            $display("======================================================================");
+            $display(" mstatus  : %08x       misa     : %08x", DUT.CSR.mstatus, 32'h40000100);
+            $display(" mie      : %08x       mip      : %08x", DUT.CSR.mie, DUT.CSR.mip);
+            $display(" mtvec    : %08x       mscratch : %08x", DUT.CSR.mtvec, DUT.CSR.mscratch);
+            $display(" mepc     : %08x       mcause   : %08x", DUT.CSR.mepc, DUT.CSR.mcause);
+            $display("======================================================================\n");
+            
+            $finish;
+        end
+    endtask
 
 endmodule

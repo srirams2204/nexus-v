@@ -30,12 +30,6 @@
 `define PC_RESET 32'h0000_0000
 
 // --------------------------------------------
-// Writeback Source Select (result_src)
-// --------------------------------------------
-`define WB_ALU    1'b0  // Writeback from ALU Result
-`define WB_MEM    1'b1  // Writeback from Data Memory
-
-// --------------------------------------------
 // Opcode field values (instr[6:0])
 // --------------------------------------------
 `define OPCODE_R_TYPE   7'b0110011
@@ -106,6 +100,8 @@
 `define CSR_MEPC         12'h341
 `define CSR_MCAUSE       12'h342
 `define CSR_MIP          12'h344
+`define CSR_MSCRATCH     12'h340
+`define CSR_MISA         12'h301
 
 // --------------------------------------------
 // CSR writeback select

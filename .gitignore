@@ -35,3 +35,10 @@ novas_dump.log
 # --- Temporary/Backup Files ---
 *.bak
 *~
+
+# --- git cloned repo ---
+riscv-arch-test/
+
+.venv/
+build/
+*.out

@@ -23,7 +23,7 @@ always @(*)begin
         end
 
         `IMM_B: begin //B-type
-            imm_out = {{19{instr_in[31]}}, instr_in[31], instr_in[7], instr_in[30:25], instr_in[11:8], 1'b0};
+            imm_out = {{20{instr_in[31]}}, instr_in[7], instr_in[30:25], instr_in[11:8], 1'b0};
         end
 
         `IMM_U: begin //U-type
@@ -31,7 +31,7 @@ always @(*)begin
         end
 
         `IMM_J: begin //J-type
-            imm_out = {{11{instr_in[31]}}, instr_in[31], instr_in[19:12], instr_in[20], instr_in[30:21], 1'b0};
+            imm_out = {{12{instr_in[31]}}, instr_in[19:12], instr_in[20], instr_in[30:21], 1'b0};
         end
 
         `IMM_CSR: begin

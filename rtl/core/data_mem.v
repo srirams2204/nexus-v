@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-
 module data_mem (
     output reg [31:0] read_data,
     output reg        misaligned,
