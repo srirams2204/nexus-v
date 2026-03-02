@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 module mux41_32 (
     output reg [31:0] mux_out,
     input  [31:0] in0,

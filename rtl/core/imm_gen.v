@@ -1,4 +1,6 @@
-module imm_gen (
+`timescale 1ns/1ps
+`include "rv_defs.vh"
+module imm_gen(
     output reg [31:0] imm_out,
     input [31:0] instr_in,
     input [2:0] imm_sel 
@@ -11,6 +13,7 @@ module imm_gen (
 // 011 = B-type
 // 100 = U-type
 // 101 = J-type
+// 110 = CSR-type
 
 always @(*)begin
     case(imm_sel)
@@ -23,7 +26,7 @@ always @(*)begin
         end
 
         `IMM_B: begin //B-type
-            imm_out = {{20{instr_in[31]}}, instr_in[7], instr_in[30:25], instr_in[11:8], 1'b0};
+            imm_out = { {20{instr_in[31]}}, instr_in[7], instr_in[30:25], instr_in[11:8], 1'b0 };
         end
 
         `IMM_U: begin //U-type
@@ -31,7 +34,7 @@ always @(*)begin
         end
 
         `IMM_J: begin //J-type
-            imm_out = {{12{instr_in[31]}}, instr_in[19:12], instr_in[20], instr_in[30:21], 1'b0};
+            imm_out = { {12{instr_in[31]}}, instr_in[19:12], instr_in[20], instr_in[30:21], 1'b0 };
         end
 
         `IMM_CSR: begin

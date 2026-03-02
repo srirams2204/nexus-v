@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 module data_mem (
     output reg [31:0] read_data,
     output reg        misaligned,
@@ -30,7 +31,7 @@ initial begin
 end
 
 // Address Decoding 
-wire [9:0] word_addr = address[11:2];
+wire [9:0] word_addr = address[11:2];  // should be 11
 wire [1:0] byte_offset = address[1:0];
 
 // Misalignment Detection

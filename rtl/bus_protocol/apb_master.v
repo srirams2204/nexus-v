@@ -1,57 +1,63 @@
 `timescale 1ns/1ps
+module apb_master (
+    // Interface to nexusV_core
+    input  wire [31:0] cpu_addr,   // From bus_addr
+    input  wire [31:0] cpu_wdata,  // From bus_wdata
+    input  wire cpu_write,         // From bus_write
+    input  wire cpu_valid,         // From bus_valid
+    output reg [31:0] cpu_rdata,   // To bus_rdata
+    output reg cpu_ready,          // To bus_ready
 
-module apb_master(
-    // APB MASTER OUTPUT
-    output reg [31:0] PADDR,  // APB Address
-    output reg [31:0] PWDATA, // APB Write Data
-    output reg PWRITE,        // APB Direction (1=Write)
-    output reg PSEL,          // APB Select (Peripheral Wakeup)
-    output reg PENABLE,       // APB Enable (Strobe)
+    // APB Master Interface 
+    output reg [31:0] paddr,   // APB Address
+    output reg [31:0] pwdata,  // APB Write Data
+    output reg pwrite,         // 1=Write, 0=Read
+    output reg psel,           // Peripheral Select
+    output reg penable,        // Peripheral Enable
+    input [31:0] prdata,       // Data from Peripheral
+    input pready,              // Ready from Peripheral
 
-    input [31:0] PRDATA,      // Data from Slave
-    input PREADY,             // Slave Ready (APB Wait State)
-
-    // APB MASTER Connection with CPU Core
-    input [31:0] bus_addr,    // Target Address (ALUOut)
-    input [31:0] bus_wdata,   // Write Data (RS2)
-    input bus_write,          // 1 = Write, 0 = Read
-    input bus_valid,          // Request Trigger
- 
-    output reg bus_ready,     // Stall Control (1=Done, 0=Wait)
-    output reg [31:0] bus_rdata,  // Data returned to CPU
-
-    // Global Signals
-    input clk,
-    input rst_n
+    // global signals
+    input  wire        pclk,
+    input  wire        presetn   
 );
 
-localparam IDLE   = 2'b00;
-localparam SETUP  = 2'b01;
-localparam ACCESS = 2'b10;
+localparam IDLE = 2'd0;
+localparam SETUP = 2'd1;
+localparam ACCESS = 2'd2;
 
 reg [1:0] state, next_state;
 
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) state <= IDLE; 
-    else        state <= next_state;
-end
+always @(posedge pclk or negedge presetn) begin
+    if (!presetn) begin
+        state <= IDLE;
+    end else begin
+        state <= next_state;
+    end
+end 
 
 always @(*) begin
     next_state = state;
+    psel = 1'b0;
+    penable = 1'b0;
+    cpu_ready = 1'b0;
     case (state)
         IDLE: begin
-            if (bus_valid) next_state = SETUP;
-            else           next_state = IDLE;
-        end 
-
+            if (cpu_valid) begin
+                next_state = SETUP;
+            end
+        end
         SETUP: begin
+            psel = 1'b1;
+            penable = 1'b0;
             next_state = ACCESS;
         end
-
         ACCESS: begin
-            if (PREADY) begin
-                // MUST go to IDLE to unfreeze the CPU stall
-                next_state = IDLE; 
+            psel = 1'b1;
+            penable = 1'b1;
+            if (pready) begin
+                cpu_ready = 1'b1;
+                next_state = IDLE;
             end else begin
                 next_state = ACCESS;
             end
@@ -60,58 +66,21 @@ always @(*) begin
     endcase
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        PADDR   <= 32'b0;
-        PWDATA  <= 32'b0;
-        PWRITE  <= 1'b0;
-        PSEL    <= 1'b0;
-        PENABLE <= 1'b0;
+always @(posedge pclk or negedge presetn) begin
+    if (!presetn) begin
+        paddr     <= 32'h0;
+        pwdata    <= 32'h0;
+        pwrite    <= 1'b0;
+        cpu_rdata <= 32'h0;
     end else begin
-        case (next_state)
-            IDLE: begin
-                PSEL    <= 1'b0;
-                PENABLE <= 1'b0;
-            end
-
-            SETUP: begin
-                PADDR   <= bus_addr;
-                PWDATA  <= bus_wdata;
-                PWRITE  <= bus_write;
-                PSEL    <= 1'b1;     // Select goes High NOW
-                PENABLE <= 1'b0;
-            end
-
-            ACCESS: begin
-                PENABLE <= 1'b1;     // Enable goes High NOW
-            end
-        endcase
-    end
-end
-
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        bus_ready <= 1'b1;
-        bus_rdata <= 32'b0;
-    end else begin
-        case (state)
-            IDLE: begin
-                if (bus_valid) bus_ready <= 1'b0; // Freeze CPU immediately
-            end
-
-            SETUP: begin
-                bus_ready <= 1'b0; // Keep Frozen
-            end
-
-            ACCESS: begin
-                if (PREADY) begin
-                    bus_ready <= 1'b1;   // Unfreeze CPU
-                    if (!PWRITE) begin
-                        bus_rdata <= PRDATA; // Capture Data
-                    end
-                end
-            end
-        endcase
+        if (state == IDLE && cpu_valid) begin
+            paddr  <= cpu_addr;
+            pwdata <= cpu_wdata;
+            pwrite <= cpu_write;
+        end
+        if (state == ACCESS && pready && !pwrite) begin
+            cpu_rdata <= prdata;
+        end
     end
 end
 

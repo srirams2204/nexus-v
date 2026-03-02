@@ -1,11 +1,18 @@
 {
     "project_name": "Nexus-V",
     "verison": "0.1.0",
+    "author": "Sriram.S",
+    "filesets": {
+        "common": "rtl/common/rv_defs.vh",
+        "rtl_core": [
+            "rtl/core/pc.v"
+        ]
+    },
     "fpga": {
         "family": "GW2A-18C",
         "device": "GW2AR-LV18QN88C8/I7",
         "board": "tangnano20k",
-        "cst_path": "fpga/constraints/tangnano20k.cst"
+        "cst_path": ""
     },
     "tools": {
         "yosys": "yosys",
@@ -13,14 +20,7 @@
         "pack": "gowin_pack",
         "prog": "openFPGALoader",
         "iverilog": "iverilog",
-        "verilator": "verilator",
         "vvp": "vvp",
         "gtkwave": "gtkwave"
-    },
-    "paths": {
-        "rtl_root": "rtl",
-        "wrapper_dir": "fpga/wrapper",
-        "logs": "fpga/logs",
-        "reports": "fpga/reports"
     }
 }

@@ -1,7 +1,9 @@
+`timescale 1ns/1ps
+`include "rv_defs.vh"
 module instr_mem (
     output reg [31:0] instr,
     output reg [31:0] addr_out,
-    input [31:0] addr,
+    input [31:0]  addr,
     input clk
 );
 
